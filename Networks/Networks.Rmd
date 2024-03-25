@@ -1,0 +1,208 @@
+---
+title: "European Country Distances: Graph Analysis and Optimal Routes"
+author: "Myriam Kapon"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(startupmsg = FALSE)
+knitr::opts_chunk$set(comment = "")
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r load_libraries}
+library(tidygraph)
+library(stringr)
+library(ggplot2)
+library(ggraph)
+library(dplyr)
+library(igraph)
+```
+
+
+```{r read_data}
+# IMPORTANT! I made a modification to the csv: United Kingdom (England/Northern Ireland/Scotland/Wales) added "/" instead of the original "," between places, so it gets parsed correctly.
+europe <- read.csv("Data/europe.csv")
+```
+
+```{r create_graph}
+graph_routes <- as_tbl_graph(europe, directed = FALSE)
+```
+
+```{r add_stuff}
+graph_routes <- graph_routes %>%
+  activate(nodes) %>%
+  mutate(
+    title = str_to_title(name),
+    label = str_replace_all(title, " ", "\n")
+  )
+```
+
+```{r get_countries}
+countries <- graph_routes %>%
+  activate(nodes) %>%
+  pull(title)
+```
+### Introduction
+In this assignment, the distance between Europian countries will be explored using graph analysis. The dataset consists of the below `r length(countries)` countries:
+
+`r countries`
+
+### Graph Plot
+The graphical representation illustrates an undirected graph interlinking various countries through edges denoting their distances. Each node represents a country, and the edges' thickness corresponds to the distance between these countries. The graphical layout doesn't adhere to real-world geographical positions as it adheres to graph network principles where spatial arrangement is inconsequential. Notably, an intriguing observation is the absence of a direct connection between Ireland and the UK with the other countries in the network, which stands out within the graph's structure.
+
+The graph's custom theme significantly improves visual clarity and organization. Nevertheless, due to the dense network of edges connecting numerous nodes, generating a Minimum Spanning Tree (MST) will be instrumental in enhancing visibility and understanding within the graph. This approach will simplify the representation by highlighting the essential connections while reducing visual clutter, making it easier to grasp the underlying structure of relationships among the countries.
+
+```{r graph_plot}
+#library(ggplot2)
+
+thm <- theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    panel.grid = element_blank(),
+    panel.grid.major = element_blank(),
+  ) 
+
+theme_set(thm)
+
+#library(ggraph)
+
+ggraph(graph_routes, layout = "graphopt") + 
+  geom_node_point() +
+  geom_edge_link(aes(width = distance), alpha = 0.4) + 
+  scale_edge_width(range = c(0.2, 2)) +
+  geom_node_text(aes(label = label), color = "purple",repel = TRUE) +
+  labs(edge_width = "Distance") +
+  theme_graph()
+```
+
+### Minimum Spanning Tree
+A Minimum Spanning Tree (MST) is a fundamental concept in graph theory and computer science. It refers to the subset of edges in an undirected, connected graph that connects all the vertices together with the minimum possible total edge weight, without forming any cycles.
+
+In simpler terms, a Minimum Spanning Tree of a graph is a tree (a connected graph with no cycles) that spans all the vertices (nodes) in the graph while minimizing the total sum of edge weights. This tree includes the fewest edges necessary to connect all the vertices and ensure reachability between any pair of vertices, maintaining a connected structure with the least cumulative edge weight.
+
+The enhanced visibility resulting from the application of the Minimum Spanning Tree significantly improves the graph's comprehensibility. Despite its deviation from geographical accuracy, the representation now allows for a clearer distinction between countries that share closer proximities. This transformation effectively moves away from the previous dense and intricate visualization, offering a more discernible depiction of relationships among neighboring countries, thus eliminating the previously perceived "tangled yarn" effect.
+
+```{r minimum_spanning_tree, fig.width=10, fig.height=6}
+# Calculate the minimum spanning tree
+mst <- minimum.spanning.tree(graph_routes, weights = E(graph_routes)$distance)
+
+# Convert the MST to a tbl_graph for ggraph
+mst_tbl <- as_tbl_graph(mst)
+
+# Plot the Minimum Spanning Tree using ggraph
+ggraph(mst_tbl, layout = "graphopt") +
+  geom_edge_link(aes(label = distance), show.legend = FALSE) +  
+  geom_node_point() +
+  geom_node_text(aes(label = name,), repel = TRUE, size = 4, color = "purple",  check_overlap = TRUE) +
+  theme_graph()
+```
+
+### Shortest Path
+
+The enhanced visualization now provides a clearer understanding of the distances, prompting an exploration into determining the shortest path between two specific countries: "Greece" and "Finland." Initially, the focus lies on computing the shortest route based on the smallest distance between these two countries. Computing the shortest route between two countries is pivotal for optimizing travel and logistics. This approach not only minimizes travel time and associated costs but also enhances productivity and environmental sustainability.  
+
+```{r shortest_path_distance}
+# Using tutorial from https://rviews.rstudio.com/2019/03/06/intro-to-graph-analysis/
+find_shortest_path_distance <- function(graph_routes, countries, from_country, to_country) {
+  from <- which(countries == from_country)
+  to <-  which(countries == to_country)
+  
+  shortest <- graph_routes %>%
+    morph(to_shortest_path, from, to, weights = distance) %>%
+    mutate(selected_node = TRUE) %>%
+    activate(edges) %>%
+    mutate(selected_edge = TRUE) %>%
+    unmorph() %>%
+    activate(nodes) %>%
+    mutate(selected_node = ifelse(is.na(selected_node), 1, 2)) %>%
+    activate(edges) %>%
+    mutate(selected_edge = ifelse(is.na(selected_edge), 1, 2)) %>%
+    arrange(selected_edge)
+  
+  title <- paste("Shortest Path from", from_country, "to", to_country, "by Distance")
+  
+  plot <- shortest %>%
+    ggraph(layout = "kk") +
+    geom_edge_diagonal(aes(alpha = selected_edge), color = "gray") +
+    geom_node_text(aes(label = label, color = name, alpha = selected_node), size = 3) +
+    labs(title = title)
+  
+  print(plot)
+  
+ return(shortest)
+}
+
+
+shortest_distance <- find_shortest_path_distance(graph_routes, countries, "Greece", "Finland")
+```
+
+It looks like the shortest path by distance is Greece -> Turkey -> Ukraine -> Poland -> Lithuania -> Latvia -> Esthonia -> Finland, with 6 stops and a total distance of 1923km.
+
+```{r path_distance}
+# This is the morph function of my choice for question 5!
+ shortest_distance %>%
+  activate(edges) %>%
+  filter(selected_edge == 2) %>%
+  as_tibble() %>%
+  summarise(
+    total_stops = n() - 1,
+    total_distance = round(sum(distance))
+  )
+```
+
+Now, to calculate the shortest path by passing the fewest countries, which holds immense practical value. This approach streamlines logistics by minimizing border crossings and administrative hurdles, thereby saving time and resources. 
+
+```{r shortest_path_countries}
+find_shortest_path <- function(graph_routes, countries, from_country, to_country) {
+  from <- which(countries == from_country)
+  to <-  which(countries == to_country)
+  
+  shortest <- graph_routes %>%
+    morph(to_shortest_path, from, to) %>%
+    mutate(selected_node = TRUE) %>%
+    activate(edges) %>%
+    mutate(selected_edge = TRUE) %>%
+    unmorph() %>%
+    activate(nodes) %>%
+    mutate(selected_node = ifelse(is.na(selected_node), 1, 2)) %>%
+    activate(edges) %>%
+    mutate(selected_edge = ifelse(is.na(selected_edge), 1, 2)) %>%
+    arrange(selected_edge)
+  
+  title <- paste("Shortest Path from", from_country, "to", to_country, "by Country Number")
+  
+  plot <- shortest %>%
+    ggraph(layout = "kk") +
+    geom_edge_diagonal(aes(alpha = selected_edge), color = "gray") +
+    geom_node_text(aes(label = label, color = name, alpha = selected_node), size = 3) +
+    labs(title = title)
+  
+  print(plot)
+  
+  return (shortest)
+}
+
+
+shortest_countries <- find_shortest_path(graph_routes, countries, "Greece", "Finland")
+```
+
+That is Greece -> Turkey -> Ukraine -> Russia -> Esthonia -> Finland, passing through 4 countries and totaling a distance of 2315km. 
+
+```{r path}
+shortest_countries %>%
+  activate(edges) %>%
+  filter(selected_edge == 2) %>%
+  as_tibble() %>%
+  summarise(
+    total_stops = n() - 1,
+    total_distance = round(sum(distance))
+  )
+```
+
+It's intriguing to note how the chosen path shifts according to the assigned weight or significance. It underscores the essence of prioritization in problem-solving—adapting our approach to align with what's crucial in finding the most suitable solution. Different objectives often lead to diverse pathways, each carrying equal significance despite their variations, emphasizing the importance of considering goals in shaping the chosen course.

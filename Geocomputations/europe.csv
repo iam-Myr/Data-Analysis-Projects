@@ -1,0 +1,83 @@
+country1,country2,distance
+Andorra,France,182
+Andorra,Spain,138
+Austria,Czech Republic,222
+Austria,Germany,132
+Austria,Hungary,242
+Austria,Italy,217
+Austria,Liechtenstein,114
+Austria,Slovakia,88
+Austria,Slovenia,260
+Austria,Switzerland,181
+Belarus,Latvia,290
+Belarus,Lithuania,325
+Belarus,Poland,180
+Belarus,Russia,674
+Belgium,France,224
+Belgium,Germany,102
+Belgium,Luxembourg,132
+Belgium,Netherlands,160
+Bosnia and Herzegovina,Croatia,140
+Bosnia and Herzegovina,Montenegro,268
+Bosnia and Herzegovina,Serbia,240
+Bulgaria,Greece,495
+Bulgaria,North Macedonia,256
+Bulgaria,Romania,139
+Bulgaria,Serbia,335
+Bulgaria,Turkey,359
+Croatia,Hungary,304
+Croatia,Montenegro,205
+Croatia,Serbia,244
+Croatia,Slovenia,59
+Cyprus,Turkey,790
+Czech Republic,Germany,132
+Czech Republic,Poland,230
+Czech Republic,Slovakia,220
+Czech Republic,Austria,222
+Denmark,Germany,307
+Denmark,Sweden,128
+Estonia,Finland,86
+Estonia,Latvia,243
+Estonia,Russia,299
+Finland,Norway,727
+Finland,Sweden,580
+France,Germany,225
+France,Italy,630
+France,Luxembourg,238
+France,Monaco,18
+France,Spain,620
+France,Switzerland,215
+Germany,Liechtenstein,170
+Germany,Netherlands,215
+Germany,Poland,444
+Germany,Switzerland,202
+Greece,North Macedonia,280
+Greece,Turkey,204
+Hungary,Romania,240
+Hungary,Slovakia,170
+Hungary,Slovenia,320
+Hungary,Ukraine,451
+Iceland,Norway,1224
+Ireland,United Kingdom (England, Northern Ireland, Scotland, Wales),360
+Italy,Slovenia,267
+Italy,Switzerland,250
+Latvia,Lithuania,234
+Lithuania,Poland,218
+Luxembourg,Netherlands,137
+Moldova,Romania,470
+Moldova,Ukraine,404
+Montenegro,North Macedonia,230
+Montenegro,Serbia,220
+Netherlands,Belgium,160
+North Macedonia,Serbia,180
+Norway,Sweden,1021
+Poland,Romania,790
+Poland,Slovakia,158
+Poland,Ukraine,288
+Romania,Serbia,157
+Romania,Ukraine,500
+Russia,Ukraine,1076
+Slovakia,Ukraine,691
+Spain,Switzerland,665
+Sweden,Norway,1204
+Ukraine,Turkey,650

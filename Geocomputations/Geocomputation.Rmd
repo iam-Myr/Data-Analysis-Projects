@@ -1,0 +1,343 @@
+---
+title: "Unraveling Greece's Elevation Tapestry: A Geocomputational Exploration"
+author: "Myriam Kapon"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(startupmsg = FALSE)
+knitr::opts_chunk$set(comment = "")
+knitr::opts_chunk$set(message = FALSE)
+```
+
+### Introduction
+
+This assignment delves into a geocomputational analysis focused on the geographical data spotlighting Greece's elevation levels across its diverse region units, coupled with the associated capitals. With 74 regional units and a staggering count of 4,144 named mountains, Greece's terrain intricately weaves a tapestry of elevations, presenting a rich landscape ripe for exploration and analysis.
+
+```{r load_libraries}
+library(raster)
+library(sf)
+library(tmap)
+library(dplyr)
+library(terra)
+library(leaflet)
+library(ggplot2)
+```
+
+```{r read_data, include = FALSE}
+# Load the raster file
+raster_data <- raster("Data/30n000e_20101117_gmted_mea300.tif")
+# Load shapefiles
+greece <- st_read("Data/GRC_ADM2/GRC_ADM2.shp")
+cities <- st_read("Data/poleis/poleis.shp")
+places <- st_read("Data/places/places.shp")
+
+# Renaming to look prettier in maps
+greece <- greece %>%
+  rename(Region = NAME)
+cities <- cities %>%
+  rename(Capital = NAME)
+```
+
+### Geographical Map of Greece
+This map provides a comprehensive view of Greece's elevation levels. Based on this map, it's evident that Greece is predominantly a mountainous nation. The prominent Pindus mountain range, often referred to as the backbone of Greece, is clearly depicted as a verdant line stretching from Thessaly to Epirus (Nothern Greece). Notably, the entirety of Chalkidiki appears notably flat in comparison.
+It is important to note that due to the map's creation, some Greek regions appear part of the sea  because their elevation is very low.
+
+```{r raster_greece}
+raster_greece <- crop(raster_data, extent(greece))
+custom_palette <- colorRampPalette(c("dodgerblue", "darkgreen", "brown","white"))(100)
+
+# Plotting the elevation data using the custom color palette
+plot(raster_greece, col = custom_palette, main = "Elevation Data for Greece")
+```
+
+```{r city_elevation}
+
+cities$elevation <- extract(raster_data, st_centroid(cities), fun = mean, na.rm = TRUE)
+
+# Extract elevation values for Greek regions
+elevation_values <- extract(raster_greece, greece, fun = mean, na.rm = TRUE)
+```
+
+```{r validate_geometries}
+# Check validity of geometries
+is_valid <- st_is_valid(greece)
+
+# If geometries are not valid, attempt to fix them
+if (!all(is_valid)) {
+  greece <- st_make_valid(greece)}
+```
+
+### Average Elevation of Greek Regions
+This map illustrates the average elevation across different regions in Greece. On a first glance, it's easy to see that Nothern Greece has the highest average elevation, having the darker green colour. Conversely, many Greek islands exhibit relatively flat terrain, a common feature due to their geographical makeup. 
+
+A predominant light to medium green hue covers most areas, indicating an average elevation range of 200 to 600 meters. This suggests that the majority of Greece's terrain falls below the mountainous threshold, which typically starts at elevations above 600 meters. This distribution could imply a blend of tall mountainous regions juxtaposed with flatter landscapes, creating an equilibrium in the overall average. Alternatively, it might challenge the initial presumption of Greece being extensively mountainous, revealing a landscape characterized by a mix of elevated and flatter terrains across the country. To investigate this further, a map of the standard deviation of elevation will be created next.
+
+```{r mean_elevation}
+greece$mean_elevation <- extract(raster_greece, greece, fun = mean, na.rm = TRUE)
+
+# Create the map
+map_mean_elevation <- tm_shape(greece) +
+  tm_polygons("mean_elevation", palette = "YlGn", title = "Mean Elevation", popup.vars = c("Region","mean_elevation"))
+
+# Convert the tmap object to a leaflet object
+leaflet_map_mean <- tmap_leaflet(map_mean_elevation)
+
+# Render the leaflet map
+leaflet_map_mean
+```
+
+Notably, Kastoria stands out as the most mountainous area , boasting five significant peaks—Askio, Grammos, Ontria, Voio, and Verno—rising between 1500 to 2100 meters high (source: http://www.wondergreece.gr/v1/en/Regions/Kastoria_Prefecture/Nature/Mountains). This rugged terrain significantly influences the neighboring regions of Florina, Kozani, Grevena, and Ioannina, contributing to their high average elevations.
+Another interesting one is Evrytania, which is almost entirely formed of mountains, including the Tymfristos and the Panaitoliko in the south. (source: http://www.wondergreece.gr/v1/en/Regions/Evritania_Prefecture/Nature/Mountains)
+
+```{r top_ten_mean}
+sorted_mean_elevation <- greece %>%
+  arrange(desc(mean_elevation))
+
+# Extract columns without geometry
+sorted_mean_elevation <- st_drop_geometry(sorted_mean_elevation[, c("Region", "mean_elevation")])
+
+# Display the top 10 rows
+top_10_mean_elevation <- head(sorted_mean_elevation, 10)
+top_10_mean_elevation
+```
+
+Regrettably, some region names regarding the least average elevation remain unspecified. However, among those listed, there are several islands (Paros, Mykonos Lemnos) and the region of the city capital, Athens. This placement aligns with its proximity to the sea and the pivotal port of Piraeus. It's a compelling choice that the capital of Greece resides on relatively flat terrain.
+
+While not explicitly featured in the lowest 10, an intriguing discovery surfaces in Evros, where a significant absence of notable elevation is observed. This distinct characteristic can be ascribed to the presence of the Evros River, which creates a valley through the region, contributing significantly to its remarkably low elevation.
+
+```{r lowest_ten_mean}
+lowest_10_mean_elevation <- sorted_mean_elevation %>%
+  tail(10) %>%
+  slice(n():1)
+
+print(lowest_10_mean_elevation)
+```
+
+### Standard Deviation of Elevation Across Greek Regions
+
+This map illustrates the standard deviation of elevation among Greece's regions, indicating the variation in elevation across each area. The predominant darker orange hue signifies considerable differences in elevation within regions, typically ranging from 200 to 400 meters.
+
+For the region with the highest average elevation, Kastoria, the map validates its mountainous nature as the standard deviation remains relatively low (), indicating consistent high elevations throughout the region. Similarly, in Evros, the confirmation aligns with the previous observation, showcasing a consistent pattern of relatively low elevation across the region.
+
+Thessaly (Central Greece - composed of Karditsa, Larissa, Magnesia, Trikala, Sporades) stands out with notably large standard deviation values, attributed to the presence of the vast Thessalian plain, surrounded by encircling mountains. This juxtaposition of flat plains amid mountainous terrain contributes to the heightened deviation. Adjacent to Thessaly in the bordering area with Central Macedonia, Mount Olympus's presence in Pieria explains its high standard deviation, being home to the highest peak in Greece, while next to plains. Phocis emerges as another intriguing region with a high standard deviation, hosting four prominent mountains—Giona, Parnassus, Vardousia, and Oeta—alongside plains and a lake. 
+Further exploration could reveal if there's a discernible pattern linking the presence of mountains, water bodies, and flat areas within regions exhibiting high standard deviations in elevation.
+
+```{r std_elevation}
+greece$sd_elevation <- extract(raster_greece, greece, fun = sd, na.rm = TRUE)
+
+map_sd_elevation <- tm_shape(greece) +
+  tm_polygons("sd_elevation", palette = "OrRd", title = "Standard Deviation of Elevation", popup.vars = c("Region","sd_elevation"))
+
+# Convert the tmap object to a leaflet object
+leaflet_map_sd <- tmap_leaflet(map_sd_elevation)
+
+# Render the leaflet map
+leaflet_map_sd
+```
+
+Adjacent to Thessaly in the bordering area with Central Macedonia, Mount Olympus's presence in Pieria explains its high standard deviation, being home to the highest peak in Greece, while next to plains. Phocis emerges as another intriguing region with a high standard deviation, hosting four prominent mountains —Giona, Parnassus, Vardousia, and Oeta— alongside plains and a lake. (source: https://greece.terrabook.com/phocis/chapter/nature/mountains/)
+
+```{r top_ten_std}
+sorted_sd_elevation <- greece %>%
+  arrange(desc(sd_elevation))
+
+# Extract columns without geometry
+sorted_sd_elevation <- st_drop_geometry(sorted_sd_elevation[, c("Region", "sd_elevation")])
+
+# Display the top 10 rows
+top_10_sd_elevation <- head(sorted_sd_elevation, 10)
+top_10_sd_elevation
+```
+
+The islands exhibit the lowest standard deviation for elevation, further confirming their predominantly flat and uniform terrain. This consistency aligns with the average elevation data, collectively illustrating the islands as areas characterized by minimal variation and relatively consistent, low-lying landscapes.
+
+```{r lowest_ten_std}
+lowest_10_sd_elevation <- sorted_sd_elevation %>%
+  tail(10) %>%
+  slice(n():1)
+
+print(lowest_10_sd_elevation)
+```
+
+### Elevation Difference Between Greek Regions and their Capital
+This map displays the absolute difference in elevation, indicating the disparity between a region's elevation and the altitude of its capital. A predominant middle shade of blue suggests no apparent correlation between a region's elevation and the chosen location for its capital.
+
+However, three regions stand out with notably high differences: Trikala (Region 750m, Capital 110m), Phocis (Region 852, Capital 180), and Achaea (Region 658, Capital 26). These regions are mountainous, yet their capitals are situated on flatter terrains within these mountainous landscapes.
+
+An intriguing anomaly is observed in Kozani, a mountainous region where its capital is nestled within the mountains themselves, defying the trend of locating capitals on flatter terrain within such regions.
+
+It's important to note that capital locations, especially for islands, aren't uniformly available, limiting a comprehensive analysis of the relationship between regional elevation and capital placement.
+
+```{r absolute_difference}
+cities <- st_transform(cities, st_crs(greece))
+
+# Perform spatial join
+merged_data <- st_join(greece, cities, join = st_contains)
+
+# Calculate absolute difference in elevation
+merged_data$absolute_difference <- abs(merged_data$mean_elevation - merged_data$elevation)
+
+map_absolute_difference <- tm_shape(merged_data) +
+  tm_polygons("absolute_difference", palette = "Blues", title = "Absolute Elevation Difference", popup.vars = c("Region","Capital"))
+
+# Convert the tmap object to a leaflet object
+leaflet_map_abs_diff <- tmap_leaflet(map_absolute_difference)
+
+# Render the leaflet map
+leaflet_map_abs_diff
+```
+
+
+Pochis and Trikala, the top two regions with significant differences in elevation between their capitals and mountainous terrain, also happen to be among the top 10 regions with higher average elevations. This intriguingly reinforces the pattern of mountainous regions opting to establish their capitals on flatter terrains despite their inherently elevated landscapes.
+
+```{r top_10_abs}
+sorted_abs_elevation <- merged_data %>%
+  arrange(desc(absolute_difference))
+
+# Extract columns without geometry
+sorted_abs_elevation <- st_drop_geometry(sorted_abs_elevation[, c("Region", "Capital", "absolute_difference")])
+
+# Display the top 10 rows
+top_10_abs_elevation <- head(sorted_abs_elevation, 10)
+top_10_abs_elevation
+```
+ 
+Exploring the top 10 regions based on various elevation-related measures reveals an interesting lack of strong similarities between these lists. However, an intriguing observation emerges: when a region exhibits substantial deviation in elevation, there's a higher likelihood—more than half the time—that its capital's altitude significantly differs from the region's average elevation. This correlation hints at a tendency for regions with diverse elevation landscapes to choose capitals situated at notably different altitudes compared to their overall average.
+There might be value in exploring this further using Data Analysis techniques.
+
+```{r similarity}
+count_common_entries_print <- function(df1, df2, column_name, label1, label2) {
+  common_entries <- merge(df1, df2, by = column_name)
+  num_common_entries <- nrow(common_entries)
+  
+  cat("Common regions between", label1, "and", label2, "lists:", num_common_entries, "\n")
+  cat("Jaccard index:",num_common_entries/nrow(df1))
+  
+   if (num_common_entries > 0) {
+    print(common_entries)
+  }
+}
+
+count_common_entries_print(top_10_mean_elevation, top_10_sd_elevation, "Region", "Mean Elevation", "Standard Deviation")
+count_common_entries_print(top_10_mean_elevation, top_10_abs_elevation, "Region", "Mean Elevation", "Absolute Difference")
+count_common_entries_print(top_10_abs_elevation, top_10_sd_elevation, "Region", "Absolute Difference", "Standarnd Deviation")
+
+```
+
+# High Elevation Places
+Among the seven locations in the provided dataset situated above 1500 meters, only one stands as a populated area: Samarina. Nestled in the elevated heights of the Pindus mountain range, Samarina rests at an altitude of 1533 meters, earning the distinction of being one of Greece's highest villages. 
+
+```{r places_elevation}
+# Extract elevation for each place
+places$elevation <- extract(raster_greece, places)
+
+# Filter places above 1500 meters
+above_1500 <- places[places$elevation > 1500, ]
+
+# Plotting cities as a base map
+base_map <- ggplot() +
+  geom_sf(data = greece, color = "black", size = 1)   # Plot cities as a base map
+  # Plotting spots for places above 1500 meters
+spots_layer <- geom_sf(data = above_1500, aes(color = population>0), size = 1) 
+# Combine base map and spots layer
+final_plot <- base_map + spots_layer +
+  labs(title = "Cities and Places Above 1500m",
+       subtitle = "Red spots indicate places above 1500m elevation",
+       color = "Elevation Status") +
+  theme_minimal()
+
+# Display the final plot
+print(final_plot)
+```
+
+### Elevation Categories
+This elevation classification helps differentiate various terrains within Greece:
+
+* Water and Lowlands (0-500 meters)
+* Foothills (500-1000 meters)
+* Low Mountains (1000-1500 meters)
+* High Mountains (1500-2000 meters)
+* Alpine Zone (2000-2500 meters)
+* High Alpine (2500-3000 meters)
+
+Bright colors were added on the map to make it easy to distinguish between the categories.
+Unfortunately with this classification,  while the mountains become more visible, a lot of land becomes water and gets lost, especially the islands. However, since most of the main land is still visible in green (500 - 1000 meters), the original hypothesis that Greece is a mountainous country can be confirmed without a doubt.
+
+```{r classes}
+my_colors <- c("lightblue", "forestgreen", "blue", "red", "yellow", "white")
+
+# Reclassify the raster
+greece_reclassified <- cut(raster_greece, breaks = c(0, 500, 1000, 1500, 2000, 2500, 3000), include.lowest = TRUE)
+
+# Plot the reclassified raster with a color palette, legend, and labels
+plot(greece_reclassified, col = my_colors, legend = FALSE, axes = TRUE,
+     main = "Elevation Categories in Greece")
+legend("topright", legend = c("0-500", "500-1000", "1000-1500", "1500-2000", "2000-2500", "2500-3000"),
+       fill = my_colors, title = "Elevation Categories")
+```
+
+```{r function_plot_elevation_profile}
+# Used a mix of the tutorial of Example 6.3 and ChatGPT to do this
+
+plot_elevation_profile <- function(city1_name, city2_name, raster_data, cities_data) {
+  # Choose two locations for elevation extraction
+  location1 <- cities_data[cities_data$Capital == city1_name, ]
+  location2 <- cities_data[cities_data$Capital == city2_name, ]
+  
+  # Create a line between the two selected locations
+  line_between_locations <- st_cast(st_union(location1, location2), "LINESTRING")
+  
+  # Extract elevation values for the line
+  elevation_along_line <- terra::extract(raster_data, line_between_locations)
+  
+  # Convert the extracted list of elevation values to a numeric vector
+  elevation_values <- unlist(elevation_along_line)
+  
+  # Create a sequence along the line for x-axis (assuming each elevation value represents a point along the line)
+  distance_along_line <- seq_along(elevation_values)
+  
+  # Plotting the elevation profile
+  plot(distance_along_line, elevation_values, type = "l", xlab = "Distance along the line", ylab = "Elevation",
+       main = paste("Elevation Profile between", city1_name, "and", city2_name))
+}
+```
+
+### Elevation Profiles
+An elevation profile means the distance in a straight line between two points, where the elevation is shown.
+It's intriguing that despite Grebena and Ioannina sharing the same high elevation level, the journey between them involves traversing through extensive and rugged mountainous terrain.
+```{r elevation_profile_Grebena_Ioannina}
+plot_elevation_profile("Grebena", "Ioannina", raster_greece, cities)
+```
+
+The route connecting Athens and Thessaloniki maintains a smooth trajectory for the most part as it runs through the sea until nearing its conclusion, where it navigates through two mountainous regions.
+```{r elevation_profile_Athens_Thessaloniki}
+plot_elevation_profile("Athens", "Thessaloniki", raster_greece, cities)
+```
+
+The journey between the city at the lowest elevation and the one at the highest reveals a consistent downward trajectory. This pattern illustrates how regions of higher elevation tend to be in close proximity to each other, while lower-lying areas similarly cluster together in geographical alignment.
+
+```{r elevation_profile_min_max}
+# Find city with minimum elevation
+min_elevation <- min(cities$elevation)
+city_min <- cities[cities$elevation == min_elevation, "Capital"]
+city_min <- as.character(city_min$Capital) # Convert to character
+
+# Find city with maximum elevation
+max_elevation <- max(cities$elevation)
+city_max <- cities[cities$elevation == max_elevation, "Capital"]
+city_max <- as.character(city_max$Capital) # Convert to character
+
+# Print the names of cities with min and max elevation
+cat("City with minimum elevation:", city_min, "(",min_elevation,") \n")
+cat("City with maximum elevation:", city_max,"(",max_elevation,") \n")
+plot_elevation_profile(city_min, city_max, raster_greece, cities)
+```
+
+### Conclusions
+From the extensive exploration of Greece's geographical features based on elevation data and its implications, several conclusions can be drawn. Firstly, Greece emerges as predominantly mountainous, with notable peaks and ranges such as the Pindus Mountains defining its landscape. While certain regions showcase high elevations, the presence of extensive plains and lowlands, especially in island regions, offers a diverse topography. The correlation between regions with significant elevation deviations and varying capital altitudes suggests a tendency for diverse landscapes to influence capital placement. The classification of elevation categories illuminates the prevalence of mountainous terrains while emphasizing the country's predominantly hilly or mountainous nature. Additionally, the consistent downward trajectory between regions of varying elevations signifies geographical alignment, where higher elevations tend to cluster together, forming distinct mountainous regions, while lower-lying areas similarly converge. Overall, Greece's diverse topography, characterized by mountains, plains, and coastal areas, showcases the intricate interplay between elevation, terrain types, and regional distribution within the country.

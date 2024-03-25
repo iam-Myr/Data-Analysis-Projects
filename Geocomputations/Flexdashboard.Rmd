@@ -1,0 +1,98 @@
+---
+title: "Greece Elevation Map"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+---
+
+```{r load_libraries}
+library(raster)
+library(sf)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r global, include=FALSE}
+# Load the raster file
+raster_data <- raster("Data/30n000e_20101117_gmted_mea300.tif")
+# Load shapefiles
+greece <- st_read("Data/GRC_ADM2/GRC_ADM2.shp")
+cities <- st_read("Data/poleis/poleis.shp")
+
+# Renaming to look prettier in maps
+greece <- greece %>%
+  rename(Region = NAME)
+cities <- cities %>%
+  rename(Capital = NAME)
+```
+
+```{r data_processing}
+raster_greece <- crop(raster_data, extent(greece))
+
+greece$mean_elevation <- extract(raster_greece, greece, fun = mean, na.rm = TRUE)
+greece$sd_elevation <- extract(raster_greece, greece, fun = sd, na.rm = TRUE)
+cities$elevation <- extract(raster_data, st_centroid(cities), fun = mean, na.rm = TRUE)
+
+# Minimum and maximum values of greece$mean_elevation
+min_mean_elevation <- floor(min(greece$mean_elevation, na.rm = TRUE)) - 1
+max_mean_elevation <- round(max(greece$mean_elevation, na.rm = TRUE)) + 1
+
+# Minimum and maximum values of greece$sd_elevation
+min_sd_elevation <- floor(min(greece$sd_elevation, na.rm = TRUE)) - 1
+max_sd_elevation <- round(max(greece$sd_elevation, na.rm = TRUE)) + 1
+
+# Minimum and maximum values of cities$elevation
+min_cities_elevation <- floor(min(cities$elevation, na.rm = TRUE)) - 1
+max_cities_elevation <- round(max(cities$elevation, na.rm = TRUE)) + 1
+
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+Regions are displayed in blue if they meet the mean elevation criteria, pink if they satisfy the standard deviation criteria, and purple if they meet both criteria simultaneously.
+
+```{r sliders}
+sliderInput("mean_adjust", label = "Region Mean Elevation:",
+            min = min_mean_elevation, max = max_mean_elevation,
+            value = 1, step = 50)
+
+sliderInput("sd_adjust", label = "Region Standard Deviation Elevation:",
+            min = min_sd_elevation, max = max_sd_elevation,
+            value = 1, step = 10)
+
+sliderInput("city_adjust", label = "City Elevation:",
+            min = min_cities_elevation, max = max_cities_elevation,
+            value = 1, step = 5)
+```
+
+Column
+-----------------------------------------------------------------------
+
+### Greek Regions and Capitals
+
+```{r map}
+output$plot <- renderPlot({
+  filtered_regions <- greece %>%
+    mutate(
+      Color = case_when(
+        mean_elevation >= input$mean_adjust & sd_elevation >= input$sd_adjust ~ "mediumorchid",
+        mean_elevation >= input$mean_adjust ~ "lightslateblue",
+        sd_elevation >= input$sd_adjust ~ "plum",
+        TRUE ~ "grey"  # Default color for regions not meeting any criteria
+      )
+    )
+
+  filtered_cities <- cities %>%
+    filter(elevation >= input$city_adjust)
+
+# Plotting cities and regions using ggplot
+  ggplot() +
+    geom_sf(data = filtered_regions, aes(fill = Color)) +
+     geom_sf_label(data = filtered_cities, aes(label = Capital), label.padding = unit(0.2, "lines")) +
+    scale_fill_identity() +  # Use the Color column for fill
+    theme_minimal()  # Customize as needed
+})
+
+plotOutput("plot")
+
+```

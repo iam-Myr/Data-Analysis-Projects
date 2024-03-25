@@ -1,0 +1,605 @@
+---
+title: "HW3"
+author: "Myriam Kapon"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(startupmsg = FALSE)
+knitr::opts_chunk$set(comment = "")
+knitr::opts_chunk$set(message = FALSE)
+options("mice.printFlag" = FALSE)
+```
+
+# Univariate and Multivariate Analysis and Visualization
+
+```{r read_data}
+diabetes <- read.csv(file.path("~", "Data", "diabetes.csv"))
+```
+
+```{r factorize}
+
+library(dplyr)
+
+columns_to_factorize <- c("gender", "BMI_cat_3", "BMI_cat_5" , "age_cat", "waist_hip_cat", "diabetes_diagnosis")
+diabetes <- diabetes %>%
+  mutate_at(
+    vars(all_of(columns_to_factorize)),
+    ~ factor(., exclude = NA))
+```
+
+This is a dataset with observations about diabetes, including demographics, medical data and a diabetes diagnosis. 
+
+
+## Understanding the Data
+
+The "diabetes" dataset consists of `r ncol(diabetes)` attributes and `r nrow(diabetes)` entries. More analytically:
+
+**Demographics**
+
+* location: (Geographical location)
+* age: (Age of the individual)
+* gender: (Gender of the individual)
+* height: (Height of the individual)
+* weight: (Weight of the individual)
+* waist: (Waist circumference)
+* hip: (Hip circumference)
+* waist_hip_ratio: (Waist-hip ratio)
+* BMI: (Body Mass Index)
+
+**Medical Data**
+
+* id: (Patient ID)
+* total_cholesterol: (Total cholesterol level)
+* stabilized.glucose: (Stabilized glucose measurement)
+* hdl: (HDL cholesterol - "good" cholesterol)
+* total_chol_hdl_ratio: (Ratio of total cholesterol to HDL cholesterol)
+* glycosoloatedhgb: (Glycosylated hemoglobin - HbA1c)
+* bp.1s: (Systolic blood pressure)
+* bp.1d: (Diastolic blood pressure)
+* diabetes_diagnosis: (Diabetes diagnosis - 0: non-diabetic, 1: diabetic)
+
+**Categories**
+
+* BMI_cat_3: (Body Mass Index categorized into 3 groups)
+* BMI_cat_5: (Body Mass Index categorized into 5 groups)
+* age_cat: (Age categorized into groups)
+* waist_hip_cat: (Waist-hip ratio categorized into groups)
+
+An overview of the dataset, showing the first 5 entries:
+```{r entries}
+head(diabetes, 5)
+```
+
+Before starting the analysis, some information about the health of the dataset will be gathered. This will ensure that the analysis is meaningful and that no problems will arise later on.
+
+```{r data_info}
+str(diabetes)
+```
+
+As can be seen, the health of the dataset is good, since all variables are of the correct type. The variables with type "Factor" have been manually factorized. Moving on to missing values:
+
+```{r missing_values}
+colSums(is.na(diabetes))
+```
+
+There are a few missing values in the set, but they will not be dealt with in this part of the analysis. Variable waist_hip_cat has the most NA's (19), which is interesting since neither waist or hip have any NA's.
+
+With all of this knowledge, the dataset analysis is ready to begin.
+
+## Univariate Analysis
+
+A quick summary of the demographic data:
+```{r demographic_data}
+demographics <- subset(diabetes,select = c(age, age_cat, location, gender, height, weight, waist, hip, waist_hip_ratio, waist_hip_cat, BMI, BMI_cat_3, BMI_cat_5))
+summary(demographics)
+```
+
+Observations:
+
+* Age: The dataset covers a range of ages from 19 to 92 years, with a mean age of approximately 46.85 years. The majority of individuals fall between 34 and 60 years old.
+* BMI (Body Mass Index) averages at 28.78, indicating an overweight range, with a fair amount of variability.
+* Waist-Hip Ratio has a mean of 0.88, which indicates an average waist size slightly smaller than the hips. This might point towards certain related to body shape or health conditions.
+* Categorical Variables: Some categories show imbalance and it should be explored visually.
+The high range in weight, waist, hip, and BMI indicates significant variability, possibly implying a diverse sample.
+
+And the medical data:
+```{r medical_data}
+medical_data <- subset(diabetes, select = c(total_cholesterol, stabilized.glucose, hdl, total_chol_hdl_ratio, glycosoloatedhgb, bp.1s, bp.1d, diabetes_diagnosis))
+summary(medical_data)
+```
+
+Observations:
+
+* Total Cholesterol to HDL Ratio has an average of 4.52, indicating an average total cholesterol level about 4.5 times higher than HDL cholesterol.
+* Glucose Levels (Stabilized Glucose): The stabilized glucose measurements in this dataset display a considerable variability, ranging from 48 to 385 mg/dL, with an average around 106.7 mg/dL. This wide range suggests diverse blood glucose levels among individuals in the sample. Higher glucose levels, especially above the normal range (usually 70-99 mg/dL when fasting), might indicate hyperglycemia, a key characteristic of diabetes. 
+* Glycosylated Hemoglobin (HbA1c): The dataset portrays diverse HbA1c levels, ranging from 2.68% to 16.11%, with an average of approximately 5.59%. The median value at 4.84% suggests that a significant portion of individuals in the sample have relatively well-controlled blood glucose over the past few months. Higher HbA1c values typically indicate poorer long-term glucose control, posing higher risks for diabetes-related complications. 
+
+Moving to a visual analysis of the data:
+```{r piecharts}
+library(tidyr)
+library(viridis)
+library(ggplot2)
+
+data_cat <- subset(diabetes, select = c(gender, age_cat, waist_hip_cat, BMI_cat_3, diabetes_diagnosis, location))
+df_long <- data_cat %>%
+  mutate(row = row_number()) %>%
+  pivot_longer(-row, names_to = "Column", values_to = "Category")
+
+# Create pie charts for each column using facets
+ggplot(df_long, aes(x = "", fill = Category)) +
+  geom_bar(width = 1,color = "white" , show.legend = FALSE) +
+  coord_polar("y", start = 0) +
+  facet_wrap(~Column) +
+  scale_fill_manual(values = plasma(9)) +
+  labs(title = "Pie Charts for Each Variable", x = NULL, y = NULL) +
+  theme_void() +
+  geom_text(aes(label = Category), stat = "count", position = position_stack(vjust = 0.5), size = 3.5, fontface = "bold",
+            color = "white",)
+
+```
+
+```{r diagnosis_count}
+value_count <- table(diabetes['diabetes_diagnosis'])
+```
+
+There are some interesting observations that can be made here. 
+
+* BMI and location are the only balanced features in the dataset. 
+* Age has more values of Categories 1 and 2 (pressumed younger), while gender and waist_hip_cat both favor Category 1. 
+* The most unbalanced feature is the one for the diagnosis of diabetes, with `r value_count[0]` of diagnosis 0 (pressumed healthy) and `r value_count[1]`` of diagnosis 1 (pressumed diabetic). 
+
+These findings show that the dataset is quite unbalanced and any analysis performed might be biased. Lastly, some variables have missing values (grey color), with waist_hip_cat having the most.
+
+It is time to plot the continuous data and, again, a facet plot is created with a bar chart for every variable.
+
+```{r numerical_plots}
+library(funModeling)
+library(Hmisc)
+plot_num(diabetes[,-1]) # drop id
+```
+
+Observations: 
+
+Data distributions mostly resemble a normal curve and they appear to have right skewerness, which indicates the existance of outliers. Bivariate analysis will be necessary to decide which to impute/delete and which to keep as interesting observations.
+
+The same observations can be made about age and waist_hip_ratio as their categorical counterparts, but BMI seems to have a right tail. The most interesting plots are the ones for stabilized.glucose and glycosoloatedhgb which will be further analyzed below.
+
+```{r boxplots, out.width= "65%", out.extra='style="float:left; padding:10px"'}
+library(ggplot2)
+library(gridExtra)
+
+# Your code for the plots remains the same as before
+
+# Plot for Stabilized Glucose Levels
+plot_glucose <- ggplot(diabetes, aes(x = "", y = stabilized.glucose)) +
+  geom_boxplot(color = "black", fill="darkorange3", alpha = 0.8, outlier.color = "darkorange3", outlier.shape = 1) +
+  labs(title = "Stabilized Glucose", x = NULL) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold")
+  )
+
+# Plot for Glycosylated Hemoglobin Levels
+plot_hemoglobin <- ggplot(diabetes, aes(x = "", y = glycosoloatedhgb)) +
+  geom_boxplot(color = "black", fill= "chartreuse4", alpha = 0.8, outlier.color = "chartreuse4", outlier.shape = 1) +
+  labs(title = "Glycosylated Hemoglobin", x = NULL) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14, face = "bold")
+  )
+
+# Arrange plots horizontally using grid.arrange
+grid.arrange(plot_glucose, plot_hemoglobin, ncol = 2)
+```
+\
+\
+\
+\
+\
+\
+Observations:
+
+Stabilized glucose has a lot of high-range outliers. Since glucose plays a role in the detection of diabetes, all of those outliers could potentially belong to observations of diabetic people. For this reason, the outliers will not be removed.
+The same can be said for Glycosylated Hemoglobin.
+\
+\
+\
+\
+\
+\
+\
+\
+\
+
+### Key Findings
+
+* There's an imbalance in certain categorical variables.
+* Glucose-related variables (stabilized glucose and glycosylated hemoglobin) have significant variability and potential outliers.
+* The dataset has diverse demographic and medical profiles, indicating a need for further bivariate and multivariate analyses to explore relationships between variables.
+
+Moving to multivariate analysis will allow a deeper exploration of relationships between variables and potential predictive factors related to diabetes diagnosis or other health conditions within the dataset.
+
+## Multivariate Analysis
+
+Starting with the scatterplots of all numerical variables to get a quick overview of the relationships between them. This pair plot can be used to find variables that predict a diabetes diagnosis:
+
+```{r numerical}
+df_numerical <- subset(diabetes, select = -c(id, location, gender, BMI_cat_3,BMI_cat_5, age_cat, waist_hip_cat, waist_hip_ratio))
+#I have to keep diabetes_diagnosis so it can color the plot below
+```
+
+```{r pair_plots, eval = FALSE}
+library(GGally)
+
+ggpairs(df_numerical, aes(color = diabetes_diagnosis), size = 0.5,
+        upper = "blank",
+        lower = list(continuous = "points", combo = "blank", discrete = "blank"), 
+        diag = NULL)
+
+```
+ 
+Observations: 
+
+* There are two features that are useful for classifying diabetes, *glycated hemoglobin* and *stabilized glucose*. These are expected findings, since glycated hemoglobin (glycosoloatedhgb) is used universally to test for diabetes, known as the "A1C test".
+* total_chol_hdl_ratio has one outlier in two dimensions, meaning it should be removed.
+ 
+* Some linear relationships can be observed between: 
+  * hip - BMI (corr. 0.88)  
+  * weight - waist (corr. 0.84)  
+  * weight - BMI (corr. 0.84)  Expected since BMI is calculated from weight.
+  * waist - hip (corr. 0.83)  
+  * waist - BMI (corr. 0.81)  
+  * weight - hip (corr. 0.81) 
+     
+These can further be confirmed by a correlation matrix using the Spearman method:
+
+```{r corr_matrix, echo = FALSE}
+library(ggplot2)
+library(reshape2)
+library(viridis) #Use for pretty colors
+
+
+library(dplyr)
+
+df_numerical <- df_numerical %>% select(-diabetes_diagnosis)
+correlation_matrix <- cor(df_numerical, method = "spearman",use = "pairwise.complete.obs") #use pairwise.complete.obs because there are NA values
+
+correlation_long <- melt(correlation_matrix)
+
+ggplot(correlation_long, aes(Var1, Var2, fill = value, label = round(value, 2))) +
+  geom_tile() +
+  geom_text(color = "black") +
+  scale_fill_viridis() +  
+  scale_x_discrete(guide = guide_axis(n.dodge=2))+
+  labs(title = "Spearman Correlation Heatmap") +
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank())
+```
+
+Observations: 
+
+* The strongest relationship is between hip and BMI (0.88). While one would expect that height and weight are correlated, it doesn't appear to be the case for this dataset. 
+* The strong negative correlation between total_chol_hdl_ratio and hdl (-0.81) essentially indicates an expected inverse relationship, which makes sense due to how total_chol_hdl_ratio is computed.
+* The stabilized glucose and glycated hemoglobin correlation (0.53) indicates a moderate positive linear relationship between the two variables.
+
+Since stabilized glucose and glycated hemoglobin appear both to have a linear relationship and to be good predictors for diagnosing diabetes against all other variables, they will be plotted plotted together. 
+
+```{r hgbVSglucose}
+ggplot(diabetes, aes(glycosoloatedhgb, stabilized.glucose, color = diabetes_diagnosis)) +
+  geom_point() +
+  geom_hline(yintercept = 132, linetype = "dashed", color = "black") +
+  geom_vline(xintercept = 7.05, linetype = "dashed", color = "black") +
+  labs(title = "Scatterplot of Glycosylated Hemoglobin vs. Stabilized Glucose",
+       x = "Glycosylated Hemoglobin",
+       y = "Stabilized Glucose") +
+  theme_minimal()
+```
+
+Immediately discernible from the plot is the significance of Glycated Hemoglobin as a robust predictor for diabetes diagnosis. Patients exhibiting a Glycated Hemoglobin level surpassing 7 are more likely to have diabetes. Conversely, while not as distinct, Stabilized Glucose demonstrates some discernible separation, particularly around the threshold value of 132.
+
+One noticeable trend is the clustering of non-diabetic values closer to zero on the plot. In contrast, diabetic values display greater dispersion and tend to form outliers. Interestingly, the previous hypothesis regarding outliers holds true for Glycated Hemoglobin; however, the initial assumption about Glucose is disproven as its outliers predominantly belong to healthy patients.
+
+Note: The dashed lines separating the diabetic vs not diabetic people were drawn using visual feedback and it would be meaningful to use a technique like linear discriminant analysis (LDA) or logistic regression to identify the boundary in a future analysis.
+
+It will also be meaningful to explore the relationship between the demographic data and the diabetes diagnosis. 
+`r #Note for intructor: I wanted to have the descriptions next to the plots, but I couldn't figure out how without doing this ugliness!`
+
+```{r genderVSdiagnosis, out.width= "65%", out.extra='style="float:right; padding:10px"'}
+ggplot(diabetes, aes(x = diabetes_diagnosis, fill = gender)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Gender vs. Diabetes Diagnosis", x = "Diagnosis", y = "Count") +
+  scale_fill_discrete(name = "Gender")
+```
+
+\
+\
+\
+\
+\
+\
+Gender Observations:
+
+* For non-diabetics, there are more people of gender 1 
+* For diabetics, there are slightly more people of gender 1
+
+This makes sense since gender is an unbalanced category favoring gender 1 nad doesn't provide any helpful insight
+\
+\
+\
+\
+\
+```{r ageVSdiagnosis, out.width= "65%", out.extra='style="float:right; padding:10px"'}
+
+ggplot(diabetes, aes(x = diabetes_diagnosis, fill = age_cat)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Age vs. Diabetes Diagnosis", x = "Diagnosis", y = "Count") +
+  scale_fill_discrete(name = "Age")
+```
+\
+\
+\
+\
+\
+\
+\
+\
+\
+Age Observations:
+
+* More people of age 1 and 2 don't have diabetes.
+* More people of age 3 and 4 have diabetes.
+Younger people are more likely to not have diabetes, while older people are more likely to be diabetic. This shows a slight trend between age and diabetes.
+\
+\
+\
+\
+\
+
+```{r locationVSdiagnosis, out.width= "65%", out.extra='style="float:right; padding:10px"'}
+
+ggplot(diabetes, aes(x = diabetes_diagnosis, fill = location)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Location vs. Diabetes Diagnosis", x = "Diagnosis", y = "Count") +
+  scale_fill_discrete(name = "Location")
+```
+\
+\
+\
+\
+\
+\
+\
+\
+Location Observations:
+
+* People from both locations are equally likely to have or not have diabetes
+* People from Buckingham have more missing diagnosis.
+This shows that location is unrelated to diabetes in this dataset.
+\
+\
+\
+\
+
+```{r BMIVSdiagnosis, out.width= "65%", out.extra='style="float:right; padding:10px"'}
+ggplot(diabetes, aes(x = diabetes_diagnosis, fill = BMI_cat_3)) +
+  geom_bar(position = "dodge") +
+  labs(title = "BMI vs. Diabetes Diagnosis", x = "Diagnosis", y = "Count") +
+  scale_fill_discrete(name = "BMI")
+```
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+
+BMI Observations:
+
+* People with higher BMIs are more likely to have diabetes.
+This is expected, since there have been found links between obesity and diabetes in other studies.
+
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+\
+
+Note: The Waist/Hip VS Diagnosis plot was excluded because no meaningful observations could be made about it, since category 0 dominates this feature.
+
+### Key Findings
+
+* Predictors: Glycated Hemoglobin (>7), Stabilized Glucose (>132) and high BMI strongly relate to diabetes.
+* Demographics: Older age groups exhibit higher diabetes prevalence.
+* Associations: Strong correlations exist between anthropometric measures.
+* Visualization: Glycated Hemoglobin distinctly separates diabetic cases.
+
+# Part B: Evaluation of Missing Values Management Techniques
+
+The original dataset contains 4 columns (total_cholestor, age, gender, weight) and no missing values. Every technique's result will be compared with this control set. To assess the effectiveness of each method, 
+
+```{r control_stats}
+real_data <- read.csv(file.path("~", "Data", "diabetes.csv"))
+real_data <- subset(real_data, select = c(total_cholesterol, age, gender, weight))
+
+summary(real_data)
+```
+
+The given dataset without implementing any techniques:
+```{r na_stats}
+na_data <- read.csv(file.path("~", "Data", "diabetes2.csv"))
+
+summary(na_data)
+```
+
+Comparison:
+
+* Data Shift: The minimum value of 'total_cholesterol' and 'age' has changed between the summaries.
+* Meaningful Changes: The distribution and descriptive statistics seem to have slightly altered, especially in the age and gender columns.
+
+```{r factorize2}
+library(dplyr) 
+na_data <- na_data %>%
+  mutate(gender = as.factor(gender))
+
+original_data <- real_data %>%
+  mutate(gender = as.factor(gender))
+```
+
+A quick visual analysis of the missing values:
+
+```{r na_plot}
+library(visdat)
+vis_miss(na_data)
+```
+
+The number of NA's is large, contributing to 30% of the data. It is apparent that a method to deal with missing values must be implemented. There doesn't appear to be a pattern in the way the NA values are distributed and, to investigate further, a cluster is applied to the plot:
+
+```{r na_plot_cluster}
+vis_miss(na_data, cluster = TRUE)
+```
+
+There's still a lot of noise in the plot, alluding to the missing values being MCAR ((Missing Completely At Random))
+
+```{r pattern_analysis}
+library(redav)
+plot_missing(na_data, percent = TRUE)
+```
+
+It looks like the percentage of NAs is the same for every row, meaning that the number of values missing is not random, but the values that are missing are random. This confirms that missing values are MCAR (Missing Completely At Random), meaning missingness has no association with any data observed or not observed. 
+
+## Deletion
+### List wise Deletion
+This method completely removes the rows that include an NA value. Considering that the dataset consists of 25% NA's, it would remove too much information. Dropping the NA rows leaves the dataset with only `r nrow(drop)` rows out of `r nrow(real_data)`.
+
+```{r listwise}
+drop <- na.omit(na_data)
+summary(drop)
+```
+
+Comparison:
+
+* Total Cholesterol: The second dataset has a wider range and potential outliers, impacting the distribution significantly compared to the first dataset. This indicates a more substantial difference.
+* Age: The difference in mean age is minor between the two datasets, suggesting a relatively close similarity.
+* Gender: There's a noticeable difference in how gender is represented. The first dataset has a more skewed representation compared to the more balanced distribution in the second dataset.
+
+*Weight: The weight range differs slightly between the two datasets, with the second dataset showing a wider range and potential outliers, but the overall impact might not be as dramatic as in total cholesterol.
+
+In summary, the datasets are closer in terms of age and weight, with relatively minor differences, while showing more significant discrepancies in total cholesterol and gender distribution. The second dataset particularly deviates more from the first in terms of total cholesterol and gender representation. It is incredible that the dataset changes so little with so many observations gone.
+
+```{r compare_listwise}
+drop <- na.omit(na_data)
+
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(ggplot2)
+
+og.m <- melt(original_data)
+drop.m <- melt(drop)
+
+# Combine the melted dataframes
+combined_data <- rbind(transform(og.m, dataset = "original data"), transform(drop.m, dataset = "dropped na"))
+
+# Plot the combined density plots with overlapping densities
+ggplot(data = combined_data, aes(x = value, fill = dataset)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap( ~ variable, scales = "free") +
+  scale_fill_brewer(palette = "Set1") +
+  labs(title = "Overlapping Density Plot for Both Datasets") +
+  theme_minimal()
+```
+
+The density function doesn't appear to change much, only becomes less defined.
+
+
+## Imputation 
+
+To implement the different imputation methods, the MICE package will be used. They will be compared to the original daatset using the Mean Absolute Error (MAE), meaning an average of absolute errors.
+
+```{r mae}
+mae <- function(data1, data2) {
+  if(ncol(data1) != ncol(data2)){
+    stop("Error! Datasets don't have the same number of columns!")   
+  }
+  
+  # Calculate absolute differences
+  abs_diff <- abs(data1 - data2)
+  
+  # Calculate MAE for each column
+  means <- colMeans(abs_diff, na.rm = TRUE)
+  
+  return(means)
+}
+
+library(mice)
+```
+
+
+### Mean Imputation
+Mean imputation is a simple method for handling missing data by replacing missing values with the mean (average) of the non-missing values for that particular variable. 
+
+```{r mean, results='hide'}
+# Generate imputed datasets
+imputed_data <- mice(na_data, method = "mean");
+
+# Generate the completed dataset (5 imputations in this case)
+mean_data <- complete(imputed_data, 1);
+```
+
+Mean Absolute Error (MAE):
+```{mean_mae}
+mae(real_data, mean_data)
+```
+
+* Total Cholesterol is the most affected with an average change of 10.28
+* Gender is the least affected with an average of 0.148
+
+### PMM
+
+Predictive Mean Matching (PMM) is an imputation method used to fill in missing values in a dataset. PMM imputation doesn't generate new values but instead finds observed (non-missing) values from the dataset that are similar to the missing value based on their relationships with other variables.
+
+```{r pmm, results='hide'}
+tempData <- mice(na_data,m=5,maxit=50,meth='pmm',seed=500);
+pmm <- complete(tempData,1);
+```
+
+```{r pmm_plot}
+densityplot(tempData)
+```
+
+Observations:
+
+* Total Cholesterol: The imputed values for cholesterol = 200 are higher that the original ones. 
+* Gender: The imputed values are less for gender 1.
+* Weight: This variable seems to be the most varied. One of the iterations for weight added a lot of values between 150 - 200
+
+Mean Absolute Error (MAE):
+
+```{r pmm_mae}
+mae(real_data, pmm)
+```
+
+This confirms the above observations. Weight was the most affected, while gender was the least affected.
+
+
+## Conclusion
+In this dataset, the method of "Mean Imputation" performed better that "PMM Imputation", giving values that were closer to the original ones.
+As for deletion, it performed much better than expected, but was difficult to compare to the Imputation methods.
+When dealing with MCAR values, it is better to impute them than to delete them.
